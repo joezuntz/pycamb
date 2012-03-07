@@ -1,0 +1,153 @@
+This code is a python scripts that generates python bindings for the main functions of CAMB,
+the Code for Anisotropies in the Microwave Background.  See http://camb.info for more details on CAMB.
+
+The python language can let you more flexibly and easily vary the parameters of CAMB, exposed by this code.  You can easily modify which variables are accessible.  For example, if you have modified CAMB to add a new parameter, you can easily add it to pycamb.
+
+
+Pre-requisites
+--------------
+
+1) CAMB.  
+
+This version of pycamb is designed for the January 2010 of CAMB, but unless the code changes significantly it will probably continue to work for later versions.  
+
+NB.  You need to compile CAMB with the same compiler set used to compile Python.  Unless you are a bit of a masochist and want to try building python with something else, this probably means gcc/gfortran.  Ensure that both are the same 32/64 bitness.
+
+2) Python
+
+This comes pre-installed on most systems these days.  You need a version 2.5 - 2.7 (not version 3 yet).  If you need a newer version it can be found in most package managers on linux, or built very easily from source.
+
+3) Numerical python (numpy)
+
+This python package can be installed by package managers on linux or easily from source.  I do not know how old a version will still work with this code, but there's no harm in going for something recent.  This code was built for 2.5.
+If you update this you will need to rebuild pycamb.
+
+Check these are both correctly installed by running
+> python
+# Some text about the python version will appear.
+>>>import numpy
+
+Also check that the installation of numpy has put the utility f2py on your path.  If not, find out where it went and add that dir to your PATh.
+
+
+4) Optional
+If you want to plot your results quickly and easily, install the matplotlib python package.
+
+
+
+Building
+--------
+
+1. Edit the CAMB Makefile as normal.
+2. Run "make all" in the camb directory to build both the CAMB driver and libcamb.a
+3. Copy the file generatePyCamb.py into your main camb directory.
+4. Run "python generatePyCamb.py".  This will build a python file and a fortran file, and attempt to compile the fortran file using the f2py utility that comes with numpy.
+
+If you needed to link any extra libraries to build camb, edit this line at the bottom of generatePyCamb.py
+compile_command="f2py -c -m _pycamb -L. -lcamb -lgomp py_camb_wrap.f90 skip: makeparameters :"
+
+to include them after -lcamb.
+The gomp library listed in the current configuration is the OpenMP library for gfortran/gcc.  If you are not using it or them then you should remove it.
+
+The f2py command can be a bit flaky, especially when trying to use other compilers with it.  Read the documentation for it using "f2py --help" if it fails.
+
+Check if the installation has worked correctly using:
+> python
+>>> import pycamb
+
+If no error messages are reported, pycamb built correctly.
+
+
+Using
+-----
+
+To use pycamb in a different directory to where it is built, add the camb directory to your python path.  In bash:
+cd /path/to/camb
+export PYTHONPATH=$PWD:$PYTHONPATH
+
+The functions currently available in the code are:
+pycamb.camb             #Get CMB power spectra; returns T,E,B,X
+pycamb.matter_power     #Get P(k); returns k,P(k)
+pycamb.transfers        #Get transfer functions; returns k,T_i(k,z), sigma8(z)
+pycamb.age              #Get age of universe at z=0
+pycamb.angular_diameter #Get angular diameter distance to given redshift
+
+All of them are called in a similar way; read the documentation string for pycamb.camb to find out more, using:
+> python
+>>> import pycamb
+>>> help(pycamb.camb)
+
+The two methods are explicitly passing the parameters when calling the functions, and constructing a dictionary to pass, e.g.:
+method 1:
+> python
+>>> import pycamb
+>>> T,E,B,X = pycamb.camb(2000,H0=72, scalar_index=0.95)
+
+method 2:
+> python
+>>> params = {"H0":72.0, scalar_index:0.95}
+>>> T,E,B,X = pycamb.camb(2000,**params)
+
+
+Interactive Mode
+----------------
+
+You can use this module either interactively or in a script.  If in interactive mode you probably want to install matplotlib (pylab) to plot your results.  The ipython module is also very useful for making interactive mode easier - it has a pylab mode where mathematical and plotting tools are already imported.
+
+To start most simply in interactive mode, run python at the command line and import everything from the module:
+> python   #Or ipython
+>>> from pylab import *
+>>> from pycamb import *
+>>> lmax=2000
+>>> T,E,B,X = camb(lmax, H0=70., omegab=0.04,omegav=0.6,omegac=0.36)
+>>> ell = arange(1,lmax)
+>>> loglog(ell,T,label="TT")
+>>> loglog(ell,E, label="EE")
+>>> legend()
+>>> show() #May not be necessary
+
+
+Scripts
+-------
+
+You can put more complex sets of commands in a script ending in .py, e.g. plot.py
+
+import pycamb
+import pylab
+lmax=2000
+ns_values = [0.8,0.9,1.0,1.1]
+ell = pylab.arange(1,lmax)
+for ns in ns_values:
+    T,E,B,X = pycamb.camb(lmax, scalar_index=ns)
+    pylab.semilogx(ell,T,label="%.2f"%ns)
+pylab.legend()
+pylab.xlabel("$\ell$", fontsize=20)
+pylab.ylabel("$\ell (\ell+1) C_\ell / 2\pi \quad [\mu K^2]$", fontsize=20)
+pylab.title("Varying Spectral Index $n_s$")
+pylab.xlim(1,2000)
+pylab.savefig("spectral_index.eps")
+
+Then run with:
+python plot.py
+
+
+Modifying
+---------
+There is no point modifying either pycamb.py or py_camb_wrap.f90 directly; they are generated by generatePyCamb.py and any changes will be lost.
+
+To simply include new parameters that you have already added to camb, read the top of generatePyCamb.py, there are instructions there.  
+
+Other modifications will be a little more difficult, as the code is rather messy.  Basically you need to write a piece of fortran code for python to output, and the a piece of python code for python to output, and add both to the generating code at the foot of the file.  Also, add your new python functions to the __all__ variable generated in the python header.
+
+
+Bugs & Issues
+-------------
+Anything error which causes CAMB to exit at a "STOP" statement will also cause python to exit.  In particular, setting lmax too low does this.
+
+If you get any weird errors in your scripts about indentation, check whether you have mixed tabs and spaces somewhere.
+
+
+Joe Zuntz
+jaz@astro.ox.ac.uk
+September 2010
+
