@@ -1,41 +1,34 @@
 #!/usr/bin/env python
+import numpy.f2py
 
-# Most of the camb parameters are members of a derived type called CambParams, 
-# the main instance of which is called CP.  Parameters added here are by default
-# assumed to be in that type.
-
-# If the parameter name starts with @ that signifies it is *not* part of the camb params type but
-# is defined elsewhere in CAMB. For example, the dark energy parameters w_lam and cs2_lam are defined
-# in the LambdaGeneral module in equations.F90.  To be modified by this code the parameters
-# need to be accessible in camb.f90
-
-# There are various members of CambParams which are themselves derived types, such as 
-# Init__Power and Reion.  To access these variables, use a double underscore to 
-# indicate what would be a % symbol in fortran.
-# e.g. reion__redshift
-
-# Parameters can be given default values to take if they are not set.
-# CAMB already provides defaults for may values in the subroutine
-# CAMB_SetDefParams in camb.f90; if these are not suitable then you can set them here.
-# Gloabl parameters (starting in @) must have default values.
-
-# Parameters with nasty names, like InitPower__ScalarPowerAmp(1), can be given friendly names
-# in the "alias" dictionary.
-
-# These are the  numerical parameters that we will let the user pass to camb.
+#JZ All the numerical parameters that we will let the user pass to camb.
+#JZ If the parameter name starts with @ that signifies it is *not* part of the camb params type but
+#JZ is defined elsewhere. For example, the dark energy parameters w_lam and cs2_lam are defined in the
+#JZ LambdaGeneral module in equations.F90
 numericalParams=['omegab', 'omegac', 'omegav', 'omegan','H0','TCMB',
                 'yhe','Num_Nu_massless','Num_Nu_massive','omegak',
                 'reion__redshift','reion__optical_depth','reion__fraction',"reion__delta_redshift",
                 'Scalar_initial_condition','scalar_index','scalar_amp',
                 'scalar_running','tensor_index','tensor_ratio',
-                '@AccuracyBoost','@lAccuracyBoost','@lSampleBoost','@w_lam','@cs2_lam',
+               '@lAccuracyBoost','@lSampleBoost','@w_lam','@cs2_lam',
+             '@AccuracyBoost'             ,
+
 ]
 
-# The boolean (logical) options that the user can pass to camb.
-logicalParameters=['WantScalars', 'WantTensors','reion__reionization','reion__use_optical_depth','@w_perturb']
 
-#Default values, a dictionary
-defaultValues={'@AccuracyBoost':1.0,'@lAccuracyBoost':1.0,'@lSampleBoost':1.0,'scalar_amp':2.1e-9,'@w_lam':-1.0,'@w_perturb':False,'@cs2_lam':1.0}
+
+defaultValues={'@AccuracyBoost':1.0,
+'@lAccuracyBoost':1.0,
+'@lSampleBoost':1.0,
+'scalar_amp':2.1e-9,
+'@w_lam':-1.0,
+'@w_perturb':False,
+'@cs2_lam':1.0,}
+
+
+#JZ The boolean options that the user can pass to camb.
+logicalParameters=['WantScalars', 'WantTensors','reion__reionization','reion__use_optical_depth','@w_perturb','DoLensing']
+
 
 #JZ These map the friendly names in the parameters above to the initial power vectors
 alias={
@@ -48,13 +41,6 @@ alias={
 
 
 
-
-#If you just want to add new parameters, don't change anything below here.
-
-
-
-
-
 nparams=len(numericalParams)+len(logicalParameters)
 
 endl="\n"
@@ -64,19 +50,19 @@ from os import system
 #Generate the fortran subroutine that is called directly from python.
 def makeFortranClsCaller(number_parameters):
     code= """
-    subroutine getcls(paramVec,lmax,cls)
+    subroutine getcls(paramVec,lmax,Max_eta_k,cls)
         use camb
         implicit none
         real, intent(in) :: paramVec(%d)
-        integer, intent(in) :: lmax
+        integer, intent(in) :: lmax, Max_eta_k
         real, intent(out) ::  cls(2:lmax,4)
         type(CAMBparams) :: P
         call CAMB_SetDefParams(P)
         call makeParameters(paramVec,P)
         P%%max_l=lmax
         P%%Max_l_tensor=lmax
-        P%%Max_eta_k=2*lmax
-        P%%Max_eta_k_tensor=2*lmax
+        P%%Max_eta_k=Max_eta_k
+        P%%Max_eta_k_tensor=Max_eta_k
         call CAMB_GetResults(P)
         call CAMB_GetCls(cls, lmax, 1, .false.)
         cls=cls*output_cl_scale
@@ -104,7 +90,68 @@ def makeFortranAgeCaller(number_parameters):
 
     return code
 
+def makeFortranDoubleCaller(number_parameters):
+    code = """subroutine genpowerandcls(paramVec,lmax,dlogk,maxk,Max_eta_k,nred,redshifts,cls)
+            use camb
+            implicit none
+            real, intent(out) ::  cls(2:lmax,4)
+            real, intent(in) :: paramVec(%d)
+            integer, intent(in) :: nred, lmax, Max_eta_k
+            real, intent(in) ::  maxk, dlogk
+            real, parameter :: minkh = 1.0e-4
+            double precision, intent(in), dimension(nred) :: redshifts
+            type(CAMBparams) :: P
+            integer :: nr, i
+            integer in,itf, points, points_check
+            nr = size(redshifts)
+            call CAMB_SetDefParams(P)
+            call makeParameters(paramVec,P)
+            P%%WantTransfer = .true.
+            P%%max_l=lmax
+            P%%Max_l_tensor=lmax
+            P%%Max_eta_k=Max_eta_k
+            P%%Max_eta_k_tensor=Max_eta_k
+            P%%transfer%%num_redshifts = nr
+            do i=1,nr
+                P%%transfer%%redshifts(i)=redshifts(i)
+            enddo
+            call CAMB_GetResults(P)
+            call CAMB_GetCls(cls, lmax, 1, .false.)
+            cls=cls*output_cl_scale
+            itf=1
+            P%%transfer%%num_redshifts = nr
+            P%%transfer%%kmax = maxk * (P%%h0/100._dl)
+            P%%transfer%%k_per_logint = dlogk
+    
+             points = log(MT%%TransferData(Transfer_kh,MT%%num_q_trans,itf)/minkh)/dlogk+1
+            allocate(matter_power(points,CP%%InitPower%%nn,nr))
+            allocate(matter_power_kh(points,nr))
 
+            do itf=1, CP%%Transfer%%num_redshifts
+                points_check = log(MT%%TransferData(Transfer_kh,MT%%num_q_trans,itf)/minkh)/dlogk+1
+                 if (points_check .ne. points)  stop 'Problem with pycamb assumption on k with z'
+                 do in = 1, CP%%InitPower%%nn
+                  call Transfer_GetMatterPower(MT,matter_power(:,in,itf), itf, in, minkh,dlogk, points)
+                 end do
+                 do i=1,points
+                  matter_power_kh(i,itf)=minkh*exp((i-1)*dlogk)
+                 end do
+            enddo !End redshifts loop
+    
+        end subroutine genpowerandcls
+
+!        subroutine freetransfers()
+!            deallocate(transfers)
+!            deallocate(transfers_k)
+!            deallocate(transfers_sigma8)
+!        end subroutine freetransfers
+
+    """ % number_parameters
+    return code
+    
+    
+    
+    
 def makeFortranTransfersCaller(number_parameters):
     code = """subroutine gentransfers(paramVec,lmax,nred,redshifts)
         use camb
@@ -140,6 +187,11 @@ def makeFortranTransfersCaller(number_parameters):
         deallocate(transfers_k)
         deallocate(transfers_sigma8)
     end subroutine freetransfers
+
+    subroutine freematterpower()
+    deallocate(matter_power)
+    deallocate(matter_power_kh)
+    end subroutine freematterpower
 
 """ % number_parameters
     return code
@@ -346,21 +398,23 @@ endif
     
     return code
 
+import pprint
 #Generate the python code that will wrap the fortran.
 def makePython(numericalParameters,logicalParameters,defaultValues):
 
     param_string=(", ".join([name.lstrip("@") for name in numericalParameters+logicalParameters])) + "\n"
-    alias_string="\n    ".join(["%s ---> %s" % (name.strip("@"),alias[name]) for name in alias])
-    defparam_string = "\n".join("%s (%e)" % (name.lstrip("@"),param) for (name,param) in defaultValues.items())
+    alias_string="\n\t".join(["%s ---> %s" % (name.strip("@"),alias[name]) for name in alias])
+    defparam_string = "\n".join("%s (%f)" % (name.lstrip("@"),param) for (name,param) in defaultValues.items())
     header="""
-__all__=["camb","age","angular_diameter","matter_power","transfers"]
 from numpy import zeros,repeat, array, float64
 import sys
 import _pycamb
 _getcls = _pycamb.pycamb_mod.getcls
 _getage = _pycamb.pycamb_mod.getage
 _gentransfers = _pycamb.pycamb_mod.gentransfers
+_genpowerandcls = _pycamb.pycamb_mod.genpowerandcls
 _freetransfers = _pycamb.pycamb_mod.freetransfers
+_freepower = _pycamb.pycamb_mod.freematterpower
 _getpower = _pycamb.pycamb_mod.getpower
 _freepower = _pycamb.pycamb_mod.freepower
 _angulardiameter = _pycamb.pycamb_mod.angulardiameter
@@ -403,7 +457,7 @@ def build_pvec(**parameters):
 
     camb_code = """    
 
-def camb(lmax,**parameters):
+def camb(lmax,max_eta_k=None,**parameters):
     \"""
     Run camb up to the given lmax, with the given parameters and return the Cls.  Parameter names are case-insensitive.
     
@@ -443,8 +497,9 @@ def camb(lmax,**parameters):
         %s
     
     \"""
+    if max_eta_k is None: max_eta_k=2*lmax
     pvec=build_pvec(**parameters)
-    cls=_getcls(pvec,lmax)
+    cls=_getcls(pvec,lmax,max_eta_k)
     return cls.transpose()
     
     """ % (param_string,defparam_string,alias_string)
@@ -462,10 +517,6 @@ Get the age of the unverse with the given parameters.  See the docstring for pyc
 """
     trans_code = """
 def transfers(redshifts=[0],**parameters):
-    \"""
-Generate transfer functions for the cosmology.  Specify the redshifts in DECREASING order (ie in temporal order).
-The cosmological parameters that can be varied in the code are the same as for the 'camb' function - see help on that function for details
-    \"""
     lmax=1000
     pvec=build_pvec(**parameters)
     redshifts = array(redshifts,dtype=float64)
@@ -485,11 +536,6 @@ The cosmological parameters that can be varied in the code are the same as for t
 """
     power_code = """
 def matter_power(redshifts=[0],maxk=1.,logk_spacing=0.02,**parameters):
-    \"""
-    Generate matter power spectra for the cosmology.  Specify the redshifts in DECREASING order (ie in temporal order).
-    You can also set the maximum k value and the spacing in log(k)
-    The cosmological parameters that can be varied in the code are the same as for the 'camb' function - see help on that function for details
-    \"""
     pvec=build_pvec(**parameters)
     redshifts = array(redshifts,dtype=float64)
     ordered_redshifts = redshifts.copy()
@@ -503,13 +549,28 @@ def matter_power(redshifts=[0],maxk=1.,logk_spacing=0.02,**parameters):
     _freepower()
     return kh.squeeze(),power.squeeze()
 """
+    both_code = """
+def get_both(redshifts=[0],lmax=2000,max_eta_k=None,maxk=1.,logk_spacing=0.02,**parameters):
+    if max_eta_k is None: max_eta_k=2*lmax
+    pvec=build_pvec(**parameters)
+    redshifts = array(redshifts,dtype=float64)
+    ordered_redshifts = redshifts.copy()
+    ordered_redshifts.sort()
+    ordered_redshifts=ordered_redshifts[::-1]
+    if not (redshifts == ordered_redshifts).all(): sys.stderr.write("WARNING:  Re-ordered redshift vector to be in temporal order.  Ouput will be similarly re-ordered.\\n")
+    if len(redshifts)>500: raise ValueError("At most 500 redshifts can be computed without changing the hardcoded camb value")
+    nred = len(redshifts)
+#genpowerandcls(paramVec,lmax,dlogk,maxk,Max_eta_k,nred,ordered_redshifts,cls)
+    cls = _genpowerandcls(pvec,lmax,logk_spacing,maxk,max_eta_k,ordered_redshifts)
+    power=_pycamb.pycamb_mod.matter_power.copy()
+    kh=_pycamb.pycamb_mod.matter_power_kh.copy()
+    _freepower()
+    return cls,kh.squeeze(),power.squeeze()
+    
+    """
+
     extra_code = """
 def angular_diameter(z,**parameters):
-    \"""
-    Compute the angular diameter distance to the given redshift for the specified cosmology.
-    You can also set the maximum k value and the spacing in log(k)
-    The cosmological parameters that can be varied in the code are the same as for the 'camb' function - see help on that function for details
-        \"""    
     pvec=build_pvec(**parameters)
     if isinstance(z,float) or len(z)==1:
         return _angulardiameter(pvec,z)
@@ -524,7 +585,7 @@ def angular_diameter(z,**parameters):
     """
 
 
-    return header + pvec_builder + camb_code + age_code + trans_code + power_code + extra_code
+    return header + pvec_builder + camb_code + age_code + trans_code + power_code + both_code + extra_code
     
 
 def makeFortranFooter():
@@ -537,6 +598,7 @@ def main():
     fortran_file.write(makeFortranClsCaller(number_parameters))
     fortran_file.write(makeFortranAgeCaller(number_parameters))
     fortran_file.write(makeFortranTransfersCaller(number_parameters))
+    fortran_file.write(makeFortranDoubleCaller(number_parameters))
     fortran_file.write(makeFortranMatterPowerCaller(number_parameters))
     fortran_file.write(makeFortranExtraFunctions(number_parameters))
     fortran_file.write(makeFortranParamSetter(numericalParams,logicalParameters,defaultValues))
