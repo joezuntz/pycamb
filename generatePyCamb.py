@@ -592,7 +592,7 @@ def makeFortranFooter():
     return "end module pycamb_mod"
     
 def main():
-    fortran_file=open("py_camb_wrap.f90","w")
+    fortran_file=open("src/py_camb_wrap.f90","w")
     fortran_file.write(makeFortranHeader())
     number_parameters = len(numericalParams) + len(logicalParameters)
     fortran_file.write(makeFortranClsCaller(number_parameters))
@@ -606,13 +606,9 @@ def main():
 #JZ This is where you would add calls to other routines that make more fortran code, for example to wrap other camb functions.
     fortran_file.close()
     
-    python_file=open("pycamb.py","w")
+    python_file=open("src/__init__.py","w")
     python_file.write(makePython(numericalParams,logicalParameters,defaultValues))
     python_file.close()
-    compile_command="f2py -c -m _pycamb -L. -lcamb -lgomp py_camb_wrap.f90 skip: makeparameters :"
-    print compile_command
-    system(compile_command)
 
-    
 if __name__=="__main__":
     main()
