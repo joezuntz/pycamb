@@ -37,19 +37,9 @@ If you want to plot your results quickly and easily, install the matplotlib pyth
 
 Building
 --------
-
-1. Edit the CAMB Makefile as normal.
-2. Run "make all" in the camb directory to build both the CAMB driver and libcamb.a
-3. Copy the file generatePyCamb.py into your main camb directory.
-4. Run "python generatePyCamb.py".  This will build a python file and a fortran file, and attempt to compile the fortran file using the f2py utility that comes with numpy.
-
-If you needed to link any extra libraries to build camb, edit this line at the bottom of generatePyCamb.py
-compile_command="f2py -c -m _pycamb -L. -lcamb -lgomp py_camb_wrap.f90 skip: makeparameters :"
-
-to include them after -lcamb.
-The gomp library listed in the current configuration is the OpenMP library for gfortran/gcc.  If you are not using it or them then you should remove it.
-
-The f2py command can be a bit flaky, especially when trying to use other compilers with it.  Read the documentation for it using "f2py --help" if it fails.
+python setup.py install --user
+or 
+python setup.py install --user
 
 Check if the installation has worked correctly using:
 > python
@@ -60,10 +50,6 @@ If no error messages are reported, pycamb built correctly.
 
 Using
 -----
-
-To use pycamb in a different directory to where it is built, add the camb directory to your python path.  In bash:
-cd /path/to/camb
-export PYTHONPATH=$PWD:$PYTHONPATH
 
 The functions currently available in the code are:
 pycamb.camb             #Get CMB power spectra; returns T,E,B,X
