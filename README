@@ -39,7 +39,7 @@ Building
 --------
 python setup.py install --user
 or 
-python setup.py install --user
+python setup.py install --inplace
 
 Check if the installation has worked correctly using:
 > python
