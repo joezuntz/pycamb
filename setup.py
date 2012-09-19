@@ -26,7 +26,7 @@ cambsources = ['camb/%s' % f for f in [
 ]]
 
 for f in cambsources:
-  if not os.path.exists('camb/Makefile'):
+  if not os.path.exists(f):
     raise Exception("At least one of CAMB code file: '%s' is not found. Download and extract to camb/" % f)
 
 try: os.mkdir('src')
