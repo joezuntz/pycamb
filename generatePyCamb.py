@@ -11,8 +11,7 @@ numericalParams=['omegab', 'omegac', 'omegav', 'omegan','H0','TCMB',
                 'Scalar_initial_condition','scalar_index','scalar_amp',
                 'scalar_running','tensor_index','tensor_ratio',
                '@lAccuracyBoost','@lSampleBoost','@w_lam','@cs2_lam',
-             '@AccuracyBoost'             ,
-
+             '@AccuracyBoost'             , 
 ]
 
 
@@ -398,6 +397,17 @@ endif
     
     return code
 
+def makeCLTemplatePath():
+  return """
+    subroutine setCLTemplatePath(path)
+        use camb
+        implicit none
+        character(LEN=1024), intent(in) :: path
+        highL_unlensed_cl_template = path
+    end subroutine setCLTemplatePath
+
+   """
+
 import pprint
 #Generate the python code that will wrap the fortran.
 def makePython(numericalParameters,logicalParameters,defaultValues):
@@ -419,6 +429,12 @@ _getpower = _pycamb.pycamb_mod.getpower
 _freepower = _pycamb.pycamb_mod.freepower
 _angulardiameter = _pycamb.pycamb_mod.angulardiameter
 _angulardiametervector = _pycamb.pycamb_mod.angulardiametervector
+import os.path
+_pycamb.pycamb_mod.setcltemplatepath(
+     os.path.join(
+        os.path.dirname(__file__),
+        'camb/HighLExtrapTemplate_lenspotentialCls.dat')
+)
 
 numericalParameters=%s
 logicalParameters=%s
@@ -602,6 +618,8 @@ def main():
     fortran_file.write(makeFortranMatterPowerCaller(number_parameters))
     fortran_file.write(makeFortranExtraFunctions(number_parameters))
     fortran_file.write(makeFortranParamSetter(numericalParams,logicalParameters,defaultValues))
+    fortran_file.write(makeCLTemplatePath())
+
     fortran_file.write(makeFortranFooter())
 #JZ This is where you would add calls to other routines that make more fortran code, for example to wrap other camb functions.
     fortran_file.close()

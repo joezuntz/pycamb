@@ -1,8 +1,8 @@
 from numpy.distutils.core import setup, Extension
 from numpy import get_include
-from numpy import f2py
 import generatePyCamb
 import os.path
+from nonstopf2py import f2py
 
 # Get CAMB from http://camb.info, untar and copy *.[fF]90 to src/
 # this is done by the script extract_camb.sh
@@ -32,6 +32,7 @@ for f in cambsources:
 try: os.mkdir('src')
 except: pass
 generatePyCamb.main()
+
 f2py.run_main(['-m', '_pycamb', '-h', '--overwrite-signature', 'src/py_camb_wrap.pyf', 
          'src/py_camb_wrap.f90', 'skip:', 'makeparameters', ':'])
 
@@ -44,13 +45,15 @@ setup(name="pycamb", version="0.1",
       zip_safe=False,
       install_requires=['numpy'],
       requires=['numpy'],
-      package_dir = {'pycamb': 'src'},
       packages = [ 'pycamb' ],
+      package_dir = {'pycamb': 'src'},
+      data_files = [('pycamb/camb', ['camb/HighLExtrapTemplate_lenspotentialCls.dat'])],
       scripts = [],
       ext_modules = [
         Extension("pycamb._pycamb", 
              ['src/py_camb_wrap.pyf'] + cambsources +['src/py_camb_wrap.f90'],
-             extra_compile_args=['-O3', '-Dintp=npy_intp'],
+             extra_compile_args=['-O0', '-g', '-Dintp=npy_intp'],
+#             libraries = {'noexit': ['src/noexit.c']},
              include_dirs=[get_include()],
         )]
     )
