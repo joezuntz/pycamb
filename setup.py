@@ -2,7 +2,12 @@ from numpy.distutils.core import setup, Extension
 from numpy import get_include
 import generatePyCamb
 import os.path
-from nonstopf2py import f2py
+import sys
+if '--nonstop' in sys.argv:
+  sys.argv.remove('--nonstop')
+  from nonstopf2py import f2py
+else:
+  from numpy import f2py
 
 # Get CAMB from http://camb.info, untar and copy *.[fF]90 to src/
 # this is done by the script extract_camb.sh
