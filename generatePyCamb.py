@@ -271,7 +271,7 @@ def makeFortranMatterPowerCaller(number_parameters):
         call CAMB_SetDefParams(P)
         call makeParameters(paramVec,P)
         P%%WantTransfer = .true.
-        lmax=10000
+        lmax=2000
         P%%max_l=lmax
         P%%Max_l_tensor=lmax
         P%%Max_eta_k=2*lmax
