@@ -1,5 +1,56 @@
+"""
+This module exposes various functions from CAMB to python.
+These functions are:
+  camb - CMB C_ell calculation
+  age  - age of the universe in Gyr
+  transfers - matter transfer functions
+  matter_power - matter power spectrum
+  angular_diameter - distance in Mpc
+  get_both  - CMB C_ell and transfer functions   
+  
+In all these functions you specify cosmological parameters 
 
-from numpy import zeros,repeat, array, float64
+Parameter names are case-insensitive.
+
+Any parameters that are not specified in the input are left with camb's default values,as given by the CAMB_SetDefParams subroutine in camb.f90.
+
+You can either specify parameters as keywords:
+    cl = camb(1000,H0=72.0,omegab=0.04)
+    
+Or using a dictionary:
+    camb_params={"H0":72.0,"omegab":0.04}
+    cl=camb(1000,**camb_params)
+
+The latter method gives you more flexibilty when writing codes.
+
+Valid parameters are all specified in the script that generated this code.  Most are elements of the CAMBparams derived type specified in modules.f90 .
+Parameters that are not in CAMBparams can be set by pre-pending an underscore.
+
+Parameters that are members of a sub-typewithin the CAMBparams type, (that is, all those accessed in fortran using CP%(something)%(varname)  ) such as the reionization parameters, should be given with the percent symbols replaced with a double underscore, __.
+
+For example, to specify the redshift of reionization, given by CP%reion%redshift in camb use:
+    cl=camb(1000,reion__redshift=11.0)
+
+Boolean (logical) parameters can be specified as you would expect:
+    cl=camb(1000,reionization=False)
+    
+You can let more parameters be passed into camb by modifiying the top of, and running, generatePyCamb.py
+
+In this code, valid normal parameters are:
+$param_string$
+
+And parameters with default values are:
+$defparam_string$    
+
+Parameters which take a vector (like the primordial power spectrum parameters) are not yet properly implemented here, 
+so only one spectral index, amplitude, etc., at a time is possible.  Keyword parameters that are mapped to camb names are:
+$alias_string$    
+
+    
+
+"""
+
+import numpy as np
 import sys
 import _pycamb
 _getcls = _pycamb.pycamb_mod.getcls
@@ -25,8 +76,8 @@ np=len(numericalParameters)+len(logicalParameters)
 nn=len(numericalParameters)
 nm=len(numericalParameters)+len(logicalParameters)
 
-def build_pvec(**parameters):
-    pvec=repeat(-1.6375e30,np)
+def _build_pvec(**parameters):
+    pvec=np.repeat(-1.6375e30,np)
     input_params=parameters.keys()
     for n,p in enumerate(numericalParameters):
         pin=p
@@ -53,46 +104,12 @@ def build_pvec(**parameters):
 
 def camb(lmax,max_eta_k=None,**parameters):
     """
-    Run camb up to the given lmax, with the given parameters and return the Cls.  Parameter names are case-insensitive.
-    
-    Any parameters that are not specified in the input are left with camb's default values,as given by the CAMB_SetDefParams subroutine in camb.f90.
-    
-    You can either specify parameters as keywords:
-        cl = camb(1000,H0=72.0,omegab=0.04)
-        
-    Or using a dictionary:
-        camb_params={"H0":72.0,"omegab":0.04}
-        cl=camb(1000,**camb_params)
-    
-    The latter method gives you more flexibilty when writing codes.
-    
-    Valid parameters are all specified in the script that generated this code.  Most are elements of the CAMBparams derived type specified in modules.f90 .
-    Parameters that are not in CAMBparams can be set by pre-pending an underscore.
-    
-    Parameters that are members of a sub-typewithin the CAMBparams type, (that is, all those accessed in fortran using CP%(something)%(varname)  ) such as the reionization parameters, should be given with the percent symbols replaced with a double underscore, __.
-    
-    For example, to specify the redshift of reionization, given by CP%reion%redshift in camb use:
-        cl=camb(1000,reion__redshift=11.0)
-    
-    Boolean (logical) parameters can be specified as you would expect:
-        cl=camb(1000,reionization=False)
-        
-    You can let more parameters be passed into camb by modifiying the top of, and running, generatePyCamb.py
-
-    In this code, valid normal parameters are:
-    $param_string$
-    
-    And parameters with default values are:
-    $defparam_string$    
-    
-    Parameters which take a vector (like the primordial power spectrum parameters) are not yet properly implemented here, 
-    so only one spectral index, amplitude, etc., at a time is possible.  Keyword parameters that are mapped to camb names are:
-    $alias_string$    
-
-    
+Run camb up to the given lmax, with the given parameters and return the Cls.  
+See the docstring for pycamb for more info on parameters.
+Returns T,E,B,X
     """
     if max_eta_k is None: max_eta_k=2*lmax
-    pvec=build_pvec(**parameters)
+    pvec=_build_pvec(**parameters)
     cls=_getcls(pvec,lmax,max_eta_k)
     return cls.transpose()
     
@@ -100,17 +117,28 @@ def camb(lmax,max_eta_k=None,**parameters):
 
 def age(**parameters):
     """
-Get the age of the unverse with the given parameters.  See the docstring for pycamb.camb for more info on parameters.
-    """
-    pvec=build_pvec(**parameters)
+Return the age of the unverse in Gyr with the given parameters.  
+See the docstring for pycamb for more info on parameters.
+"""
+    pvec=_build_pvec(**parameters)
     age=_getage(pvec)
     return age
     
 
 def transfers(redshifts=[0],**parameters):
+    """
+Calculate the matter power transfer function at the specified redshifts.
+The redshifts should be monotonic *DECREASING* i.e. in chronological order.
+If they are not the output will be re-ordered as if they were.
+Return k, T, sigma8 as arrays in z
+
+See the docstring for pycamb for more info on parameters.
+
+    """
+   
     lmax=1000
-    pvec=build_pvec(**parameters)
-    redshifts = array(redshifts,dtype=float64)
+    pvec=_build_pvec(**parameters)
+    redshifts = np.array(redshifts,dtype=np.float64)
     ordered_redshifts = redshifts.copy()
     ordered_redshifts.sort()
     ordered_redshifts=ordered_redshifts[::-1]
@@ -126,8 +154,21 @@ def transfers(redshifts=[0],**parameters):
 
 
 def matter_power(redshifts=[0],maxk=1.,logk_spacing=0.02,get_sigma8=False,**parameters):
-    pvec=build_pvec(**parameters)
-    redshifts = array(redshifts,dtype=float64)
+    """
+Calculate the matter power spectrum at the specified redshifts.
+The redshifts should be monotonic *DECREASING* i.e. in chronological order.
+If they are not the output will be re-ordered as if they were.
+
+Return k and P as arrays in z
+
+If the parameter get_sigma8 is set then that will also be returned.
+
+See the docstring for pycamb for more info on parameters.
+
+    """
+
+    pvec=_build_pvec(**parameters)
+    redshifts = np.array(redshifts,dtype=np.float64)
     ordered_redshifts = redshifts.copy()
     ordered_redshifts.sort()
     ordered_redshifts=ordered_redshifts[::-1]
@@ -144,9 +185,20 @@ def matter_power(redshifts=[0],maxk=1.,logk_spacing=0.02,get_sigma8=False,**para
         return kh.squeeze(),power.squeeze()
 
 def get_both(redshifts=[0],lmax=2000,max_eta_k=None,maxk=1.,logk_spacing=0.02,**parameters):
+    """
+Calculate BOTH the matter power spectrum at the specified redshifts and the CMB C_ell
+
+The redshifts should be monotonic *DECREASING* i.e. in chronological order.
+If they are not the output will be re-ordered as if they were.
+
+Return (T,E,B,X),  k, T, sigma8, the latter 3 as arrays in z
+
+See the docstring for pycamb for more info on parameters.
+
+    """
     if max_eta_k is None: max_eta_k=2*lmax
-    pvec=build_pvec(**parameters)
-    redshifts = array(redshifts,dtype=float64)
+    pvec=_build_pvec(**parameters)
+    redshifts = np.array(redshifts,dtype=np.float64)
     ordered_redshifts = redshifts.copy()
     ordered_redshifts.sort()
     ordered_redshifts=ordered_redshifts[::-1]
@@ -162,10 +214,20 @@ def get_both(redshifts=[0],lmax=2000,max_eta_k=None,maxk=1.,logk_spacing=0.02,**
     
     
 def angular_diameter(z,**parameters):
-    pvec=build_pvec(**parameters)
+    """
+Calculate the angular diameter distance to the given redshift(s).
+
+The redshifts should be monotonic *DECREASING* i.e. in chronological order.
+If they are not the output will be re-ordered as if they were.
+
+Return d_A(z)
+
+See the docstring for pycamb for more info on parameters.
+"""
+    pvec=_build_pvec(**parameters)
     if isinstance(z,float) or len(z)==1:
         return _angulardiameter(pvec,z)
-    redshifts = array(z,dtype=float64)
+    redshifts = np.array(z,dtype=np.float64)
     ordered_redshifts = redshifts.copy()
     ordered_redshifts.sort()
     ordered_redshifts=ordered_redshifts[::-1]

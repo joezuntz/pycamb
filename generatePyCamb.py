@@ -27,11 +27,11 @@ defaultValues={'@AccuracyBoost':1.0,
 '@cs2_lam':1.0,}
 
 
-#JZ The boolean options that the user can pass to camb.
+# The boolean options that the user can pass to camb.
 logicalParameters=['WantScalars', 'WantTensors','reion__reionization','reion__use_optical_depth','@w_perturb','DoLensing']
 
 
-#JZ These map the friendly names in the parameters above to the initial power vectors
+# These map the friendly names in the parameters above to the initial power vectors
 alias={
 'scalar_index': 'InitPower__an(1)',
 'scalar_amp': 'InitPower__ScalarPowerAmp(1)',
