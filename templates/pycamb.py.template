@@ -1,0 +1,176 @@
+
+from numpy import zeros,repeat, array, float64
+import sys
+import _pycamb
+_getcls = _pycamb.pycamb_mod.getcls
+_getage = _pycamb.pycamb_mod.getage
+_gentransfers = _pycamb.pycamb_mod.gentransfers
+_genpowerandcls = _pycamb.pycamb_mod.genpowerandcls
+_freetransfers = _pycamb.pycamb_mod.freetransfers
+_freepower = _pycamb.pycamb_mod.freematterpower
+_getpower = _pycamb.pycamb_mod.getpower
+_angulardiameter = _pycamb.pycamb_mod.angulardiameter
+_angulardiametervector = _pycamb.pycamb_mod.angulardiametervector
+import os.path
+_pycamb.pycamb_mod.setcltemplatepath(
+     os.path.join(
+        os.path.dirname(__file__),
+        'camb/HighLExtrapTemplate_lenspotentialCls.dat')
+)
+
+numericalParameters=$numericalParameters$
+logicalParameters=$logicalParameters$
+defaultValues=$defaultValues$
+np=len(numericalParameters)+len(logicalParameters)
+nn=len(numericalParameters)
+nm=len(numericalParameters)+len(logicalParameters)
+
+def build_pvec(**parameters):
+    pvec=repeat(-1.6375e30,np)
+    input_params=parameters.keys()
+    for n,p in enumerate(numericalParameters):
+        pin=p
+        if p.startswith('@'): pin=p.lstrip('@')
+        if pin in input_params:
+            pvec[n]=parameters[pin]
+            input_params.remove(pin)
+    for n,p in enumerate(logicalParameters):
+        pin=p
+        if p.startswith('@'): pin=p.lstrip('@')
+        if pin in input_params:        
+            if parameters[pin]:
+                pvec[n+nn]=1.0
+            else:
+                pvec[n+nn]=0.0
+            input_params.remove(pin)
+
+    if input_params:
+        print "WARNING: Unrecognized parameters:"
+        for p in input_params:
+            print p
+    return pvec
+    
+
+def camb(lmax,max_eta_k=None,**parameters):
+    """
+    Run camb up to the given lmax, with the given parameters and return the Cls.  Parameter names are case-insensitive.
+    
+    Any parameters that are not specified in the input are left with camb's default values,as given by the CAMB_SetDefParams subroutine in camb.f90.
+    
+    You can either specify parameters as keywords:
+        cl = camb(1000,H0=72.0,omegab=0.04)
+        
+    Or using a dictionary:
+        camb_params={"H0":72.0,"omegab":0.04}
+        cl=camb(1000,**camb_params)
+    
+    The latter method gives you more flexibilty when writing codes.
+    
+    Valid parameters are all specified in the script that generated this code.  Most are elements of the CAMBparams derived type specified in modules.f90 .
+    Parameters that are not in CAMBparams can be set by pre-pending an underscore.
+    
+    Parameters that are members of a sub-typewithin the CAMBparams type, (that is, all those accessed in fortran using CP%(something)%(varname)  ) such as the reionization parameters, should be given with the percent symbols replaced with a double underscore, __.
+    
+    For example, to specify the redshift of reionization, given by CP%reion%redshift in camb use:
+        cl=camb(1000,reion__redshift=11.0)
+    
+    Boolean (logical) parameters can be specified as you would expect:
+        cl=camb(1000,reionization=False)
+        
+    You can let more parameters be passed into camb by modifiying the top of, and running, generatePyCamb.py
+
+    In this code, valid normal parameters are:
+    $param_string$
+    
+    And parameters with default values are:
+    $defparam_string$    
+    
+    Parameters which take a vector (like the primordial power spectrum parameters) are not yet properly implemented here, 
+    so only one spectral index, amplitude, etc., at a time is possible.  Keyword parameters that are mapped to camb names are:
+    $alias_string$    
+
+    
+    """
+    if max_eta_k is None: max_eta_k=2*lmax
+    pvec=build_pvec(**parameters)
+    cls=_getcls(pvec,lmax,max_eta_k)
+    return cls.transpose()
+    
+    
+
+def age(**parameters):
+    """
+Get the age of the unverse with the given parameters.  See the docstring for pycamb.camb for more info on parameters.
+    """
+    pvec=build_pvec(**parameters)
+    age=_getage(pvec)
+    return age
+    
+
+def transfers(redshifts=[0],**parameters):
+    lmax=1000
+    pvec=build_pvec(**parameters)
+    redshifts = array(redshifts,dtype=float64)
+    ordered_redshifts = redshifts.copy()
+    ordered_redshifts.sort()
+    ordered_redshifts=ordered_redshifts[::-1]
+    if not (redshifts == ordered_redshifts).all(): sys.stderr.write("WARNING:  Re-ordered redshift vector to be in temporal order.  Ouput will be similarly re-ordered.\n")
+    if len(redshifts)>500: raise ValueError("At most 500 redshifts can be computed without changing the hardcoded camb value")
+    
+    _gentransfers(pvec,lmax,ordered_redshifts)
+    T = _pycamb.pycamb_mod.transfers.copy()
+    K = _pycamb.pycamb_mod.transfers_k.copy()
+    S = _pycamb.pycamb_mod.transfers_sigma8.copy()
+    _freetransfers()
+    return K,T,S
+
+
+def matter_power(redshifts=[0],maxk=1.,logk_spacing=0.02,get_sigma8=False,**parameters):
+    pvec=build_pvec(**parameters)
+    redshifts = array(redshifts,dtype=float64)
+    ordered_redshifts = redshifts.copy()
+    ordered_redshifts.sort()
+    ordered_redshifts=ordered_redshifts[::-1]
+    if not (redshifts == ordered_redshifts).all(): sys.stderr.write("WARNING:  Re-ordered redshift vector to be in temporal order.  Ouput will be similarly re-ordered.\n")
+    if len(redshifts)>500: raise ValueError("At most 500 redshifts can be computed without changing the hardcoded camb value")
+    _getpower(pvec,maxk,logk_spacing,ordered_redshifts)
+    power=_pycamb.pycamb_mod.matter_power.copy()
+    kh=_pycamb.pycamb_mod.matter_power_kh.copy()
+    sigma8=_pycamb.pycamb_mod.matter_power_sigma8.copy()
+    _freepower()
+    if get_sigma8:
+        return kh.squeeze(),power.squeeze(),sigma8.squeeze()
+    else:
+        return kh.squeeze(),power.squeeze()
+
+def get_both(redshifts=[0],lmax=2000,max_eta_k=None,maxk=1.,logk_spacing=0.02,**parameters):
+    if max_eta_k is None: max_eta_k=2*lmax
+    pvec=build_pvec(**parameters)
+    redshifts = array(redshifts,dtype=float64)
+    ordered_redshifts = redshifts.copy()
+    ordered_redshifts.sort()
+    ordered_redshifts=ordered_redshifts[::-1]
+    if not (redshifts == ordered_redshifts).all(): sys.stderr.write("WARNING:  Re-ordered redshift vector to be in temporal order.  Ouput will be similarly re-ordered.\n")
+    if len(redshifts)>500: raise ValueError("At most 500 redshifts can be computed without changing the hardcoded camb value")
+    nred = len(redshifts)
+#genpowerandcls(paramVec,lmax,dlogk,maxk,Max_eta_k,nred,ordered_redshifts,cls)
+    cls = _genpowerandcls(pvec,lmax,logk_spacing,maxk,max_eta_k,ordered_redshifts)
+    power=_pycamb.pycamb_mod.matter_power.copy()
+    kh=_pycamb.pycamb_mod.matter_power_kh.copy()
+    _freepower()
+    return cls,kh.squeeze(),power.squeeze()
+    
+    
+def angular_diameter(z,**parameters):
+    pvec=build_pvec(**parameters)
+    if isinstance(z,float) or len(z)==1:
+        return _angulardiameter(pvec,z)
+    redshifts = array(z,dtype=float64)
+    ordered_redshifts = redshifts.copy()
+    ordered_redshifts.sort()
+    ordered_redshifts=ordered_redshifts[::-1]
+    if not (redshifts == ordered_redshifts).all(): sys.stderr.write("WARNING:  Re-ordered redshift vector to be in temporal order.  Ouput will be similarly re-ordered.\n")
+    return _angulardiametervector(pvec,ordered_redshifts)
+        
+    
+    
