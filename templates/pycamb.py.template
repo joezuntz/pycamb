@@ -50,6 +50,9 @@ $alias_string$
 
 """
 
+__all__ = ['camb','age','transfers', 'matter_power', 'get_both', 'angular_diameter']
+
+
 import numpy as np
 import sys
 import _pycamb
@@ -72,12 +75,12 @@ _pycamb.pycamb_mod.setcltemplatepath(
 numericalParameters=$numericalParameters$
 logicalParameters=$logicalParameters$
 defaultValues=$defaultValues$
-np=len(numericalParameters)+len(logicalParameters)
-nn=len(numericalParameters)
-nm=len(numericalParameters)+len(logicalParameters)
+NP=len(numericalParameters)+len(logicalParameters)
+NN=len(numericalParameters)
+NM=len(numericalParameters)+len(logicalParameters)
 
 def _build_pvec(**parameters):
-    pvec=np.repeat(-1.6375e30,np)
+    pvec=np.repeat(-1.6375e30,NP)
     input_params=parameters.keys()
     for n,p in enumerate(numericalParameters):
         pin=p
@@ -90,9 +93,9 @@ def _build_pvec(**parameters):
         if p.startswith('@'): pin=p.lstrip('@')
         if pin in input_params:        
             if parameters[pin]:
-                pvec[n+nn]=1.0
+                pvec[n+NN]=1.0
             else:
-                pvec[n+nn]=0.0
+                pvec[n+NN]=0.0
             input_params.remove(pin)
 
     if input_params:
