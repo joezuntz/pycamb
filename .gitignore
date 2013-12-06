@@ -1,1 +1,10 @@
 html/
+.project
+.pydevproject
+build
+src
+CAMB.tar.gz
+CAMB.tar
+camb
+*.pyc
+*~
