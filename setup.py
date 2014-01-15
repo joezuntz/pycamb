@@ -46,7 +46,7 @@ f2py.run_main(['-m', '_pycamb', '-h', '--overwrite-signature', 'src/py_camb_wrap
 if StrictVersion(numpy.version.version) > StrictVersion('1.6.1'):
     pycamb_ext = Extension("pycamb._pycamb",
                            ['src/py_camb_wrap.pyf'] + cambsources + ['src/py_camb_wrap.f90'],
-                           extra_f90_compile_args=['-O0', '-g', '-Dintp=npy_intp', '-fopenmp'],
+                           extra_f90_compile_args=['-ffree-line-length-none','-O0', '-g', '-Dintp=npy_intp', '-fopenmp'],
                            libraries=['gomp'],
                            include_dirs=[get_include()],
                            )

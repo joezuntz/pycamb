@@ -72,6 +72,11 @@ _pycamb.pycamb_mod.setcltemplatepath(
         'camb/HighLExtrapTemplate_lenspotentialCls.dat')
 )
 
+NONLINEAR_NONE = 0
+NONLINEAR_PK = 1
+#Others not supported yet
+
+
 numericalParameters=$numericalParameters$
 logicalParameters=$logicalParameters$
 defaultValues=$defaultValues$
@@ -156,7 +161,7 @@ See the docstring for pycamb for more info on parameters.
     return K,T,S
 
 
-def matter_power(redshifts=[0],maxk=1.,logk_spacing=0.02,get_sigma8=False,**parameters):
+def matter_power(redshifts=[0],k=np.logspace(-3,0,50), get_sigma8=False,**parameters):
     """
 Calculate the matter power spectrum at the specified redshifts.
 The redshifts should be monotonic *DECREASING* i.e. in chronological order.
@@ -172,12 +177,13 @@ See the docstring for pycamb for more info on parameters.
 
     pvec=_build_pvec(**parameters)
     redshifts = np.array(redshifts,dtype=np.float64)
+    k = np.array(k,dtype=np.float64)
     ordered_redshifts = redshifts.copy()
     ordered_redshifts.sort()
     ordered_redshifts=ordered_redshifts[::-1]
     if not (redshifts == ordered_redshifts).all(): sys.stderr.write("WARNING:  Re-ordered redshift vector to be in temporal order.  Ouput will be similarly re-ordered.\n")
     if len(redshifts)>500: raise ValueError("At most 500 redshifts can be computed without changing the hardcoded camb value")
-    _getpower(pvec,maxk,logk_spacing,ordered_redshifts)
+    _getpower(pvec,k,ordered_redshifts)
     power=_pycamb.pycamb_mod.matter_power.copy()
     kh=_pycamb.pycamb_mod.matter_power_kh.copy()
     sigma8=_pycamb.pycamb_mod.matter_power_sigma8.copy()
@@ -187,7 +193,7 @@ See the docstring for pycamb for more info on parameters.
     else:
         return kh.squeeze(),power.squeeze()
 
-def get_both(redshifts=[0],lmax=2000,max_eta_k=None,maxk=1.,logk_spacing=0.02,**parameters):
+def get_both(redshifts=[0],lmax=2000,max_eta_k=None,k=np.logspace(-3,0,50),**parameters):
     """
 Calculate BOTH the matter power spectrum at the specified redshifts and the CMB C_ell
 
@@ -208,8 +214,7 @@ See the docstring for pycamb for more info on parameters.
     if not (redshifts == ordered_redshifts).all(): sys.stderr.write("WARNING:  Re-ordered redshift vector to be in temporal order.  Ouput will be similarly re-ordered.\n")
     if len(redshifts)>500: raise ValueError("At most 500 redshifts can be computed without changing the hardcoded camb value")
     nred = len(redshifts)
-#genpowerandcls(paramVec,lmax,dlogk,maxk,Max_eta_k,nred,ordered_redshifts,cls)
-    cls = _genpowerandcls(pvec,lmax,logk_spacing,maxk,max_eta_k,ordered_redshifts)
+    cls = _genpowerandcls(pvec,lmax,max_eta_k, k, ordered_redshifts)
     power=_pycamb.pycamb_mod.matter_power.copy()
     kh=_pycamb.pycamb_mod.matter_power_kh.copy()
     _freepower()

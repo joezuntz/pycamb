@@ -79,19 +79,27 @@ module pycamb_mod
         if (allocated(matter_power_sigma8))    deallocate(matter_power_sigma8)
     end subroutine freematterpower
 
-subroutine genpowerandcls(paramVec,lmax,dlogk,maxk,Max_eta_k,nred,redshifts,cls)
+subroutine genpowerandcls(paramVec,lmax,Max_eta_k,nk_input, kh_input, nred,redshifts,cls)
             use camb
             implicit none
             real, intent(out) ::  cls(2:lmax,4)
             real, intent(in) :: paramVec($number_parameters$)
             integer, intent(in) :: nred, lmax, Max_eta_k
-            real, intent(in) ::  maxk, dlogk
+            real  ::  maxk, dlogk
             real, parameter :: minkh = 1.0e-4
             double precision, intent(in), dimension(nred) :: redshifts
             type(CAMBparams) :: P
-            integer :: nr, i
+            integer :: nr, i, nk
             integer in,itf, points, points_check
+            integer, intent(in) :: nk_input
+            double precision, intent(in), dimension(nk_input) :: kh_input
+            type(MatterPowerData) :: PK_data
+            
+            dlogk = 0.02
             nr = size(redshifts)
+            nk = size(kh_input)
+            maxk = maxval(kh_input)*2.0
+
             call CAMB_SetDefParams(P)
             call makeParameters(paramVec,P)
             P%WantTransfer = .true.
@@ -99,47 +107,47 @@ subroutine genpowerandcls(paramVec,lmax,dlogk,maxk,Max_eta_k,nred,redshifts,cls)
             P%Max_l_tensor=lmax
             P%Max_eta_k=Max_eta_k
             P%Max_eta_k_tensor=Max_eta_k
-            P%transfer%num_redshifts = nr
+            P%transfer%PK_num_redshifts = nr
+
             do i=1,nr
-                P%transfer%redshifts(i)=redshifts(i)
+                P%transfer%pk_redshifts(i)=redshifts(i)
             enddo
-            call CAMB_GetResults(P)
-            call CAMB_GetCls(cls, lmax, 1, .false.)
-            cls=cls*output_cl_scale
-            itf=1
+
             P%transfer%num_redshifts = nr
             P%transfer%kmax = maxk * (P%h0/100._dl)
             P%transfer%k_per_logint = dlogk
-    
-             points = log(MT%TransferData(Transfer_kh,MT%num_q_trans,itf)/minkh)/dlogk+1
-             call freematterpower()
 
-            allocate(matter_power(points,CP%InitPower%nn,nr))
-            allocate(matter_power_kh(points,nr))
+
+            call Transfer_SortAndIndexRedshifts(P%Transfer)
+
+            call CAMB_GetResults(P)
+            call CAMB_GetCls(cls, lmax, 1, .false.)
+            cls=cls*output_cl_scale
+
+    
+            call freematterpower()
+
+            allocate(matter_power(nk,CP%InitPower%nn,nr))
+            allocate(matter_power_kh(nk,nr))
             allocate(matter_power_sigma8(nr))
-            
-            matter_power_sigma8 = MT%sigma_8(:,1)
-            do itf=1, CP%Transfer%num_redshifts
-                points_check = log(MT%TransferData(Transfer_kh,MT%num_q_trans,itf)/minkh)/dlogk+1
-                 if (points_check .ne. points)  stop 'Problem with pycamb assumption on k with z'
-                 do in = 1, CP%InitPower%nn
-                  call Transfer_GetMatterPower(MT,matter_power(:,in,itf), itf, in, minkh,dlogk, points)
-                 end do
-                 do i=1,points
-                  matter_power_kh(i,itf)=minkh*exp((i-1)*dlogk)
-                 end do
-            enddo !End redshifts loop
+
+            call Transfer_GetMatterPowerData(MT, PK_data, 1)
+
+            if (P%nonlinear==nonlinear_pk .or. P%nonlinear==NonLinear_both) call MatterPowerdata_MakeNonlinear(PK_data)
+
+            do itf=1,nr
+                call Transfer_Get_sigma8(MT, matter_power_sigma8(i))
+                do i=1,nk
+                    matter_power_kh(i,itf) = kh_input(i)
+                    matter_power(i, 1, itf) = MatterPowerData_k(PK_data, kh_input(i), itf)
+                enddo
+            enddo
+
     
         end subroutine genpowerandcls
 
-!        subroutine freetransfers()
-!            deallocate(transfers)
-!            deallocate(transfers_k)
-!            deallocate(transfers_sigma8)
-!        end subroutine freetransfers
-
     
-    subroutine getpower(paramVec,maxk,dlogk,nred,redshifts)
+    subroutine getpower(paramVec,nk_input, kh_input,nred,redshifts)
         use camb
         implicit none
         real, intent(in) :: paramVec($number_parameters$)
@@ -147,54 +155,59 @@ subroutine genpowerandcls(paramVec,lmax,dlogk,maxk,Max_eta_k,nred,redshifts,cls)
         integer :: lmax
         double precision, intent(in), dimension(nred) :: redshifts
         type(CAMBparams) :: P
-        integer :: nr, i
-        real, intent(in) ::  maxk, dlogk
+        type(MatterPowerData) :: PK_data
+        integer :: nr, i, nk
+        integer, intent(in) :: nk_input
+        double precision, intent(in), dimension(nk_input) :: kh_input
+        real ::  maxk, dlogk
         real, parameter :: minkh = 1.0e-4
         integer in,itf, points, points_check
+
+
+        dlogk = 0.02
         nr = size(redshifts)
+        nk = size(kh_input)
+        maxk = maxval(kh_input)*2.0
+
+
+
         call CAMB_SetDefParams(P)
         call makeParameters(paramVec,P)
         P%WantTransfer = .true.
+        P%PK_WantTransfer = .true.
         lmax=2000
         P%max_l=lmax
         P%Max_l_tensor=lmax
         P%Max_eta_k=2*lmax
         P%Max_eta_k_tensor=2*lmax
-        P%transfer%num_redshifts = nr
+        P%transfer%pk_num_redshifts = nr
         
         P%transfer%kmax = maxk * (P%h0/100._dl)
         P%transfer%k_per_logint = dlogk
         
         do i=1,nr
-            P%transfer%redshifts(i)=redshifts(i)
+            P%transfer%pk_redshifts(i)=redshifts(i)
         enddo
+        call Transfer_SortAndIndexRedshifts(P%Transfer)
+
         call CAMB_GetResults(P)
 
-        itf=1
-         points = log(MT%TransferData(Transfer_kh,MT%num_q_trans,itf)/minkh)/dlogk+1
-         call freematterpower()
-        allocate(matter_power(points,CP%InitPower%nn,nr))
-        allocate(matter_power_kh(points,nr))
+        call freematterpower()
+        allocate(matter_power(nk,CP%InitPower%nn,nr))
+        allocate(matter_power_kh(nk,nr))
         allocate(matter_power_sigma8(nr))
-        matter_power_sigma8 = MT%sigma_8(:,1)
 
-        do itf=1, CP%Transfer%num_redshifts
-            points_check = log(MT%TransferData(Transfer_kh,MT%num_q_trans,itf)/minkh)/dlogk+1
-             if (points_check .ne. points)  stop 'Problem with pycamb assumption on k with z'
-             do in = 1, CP%InitPower%nn
-              call Transfer_GetMatterPower(MT,matter_power(:,in,itf), itf, in, minkh,dlogk, points)
-!              if (CP%OutputNormalization == outCOBE) then
-!                 if (allocated(COBE_scales)) then
-!                  outpower(:,in) = outpower(:,in)*COBE_scales(in)
-!                 else
-!                  if (FeedbackLevel>0) write (*,*) 'Cannot COBE normalize - no Cls generated'
-!                 end if
-!             end if
-             end do
-             do i=1,points
-              matter_power_kh(i,itf)=minkh*exp((i-1)*dlogk)
-             end do
-        enddo !End redshifts loop
+        call Transfer_GetMatterPowerData(MT, PK_data, 1)
+
+        if (P%nonlinear==nonlinear_pk .or. P%nonlinear==NonLinear_both) call MatterPowerdata_MakeNonlinear(PK_data)
+
+        do itf=1,nr
+            call Transfer_Get_sigma8(MT, matter_power_sigma8(i))
+            do i=1,nk
+                matter_power_kh(i,itf) = kh_input(i)
+                matter_power(i, 1, itf) = MatterPowerData_k(PK_data, kh_input(i), itf)
+            enddo
+        enddo
     end subroutine getpower
 
 
