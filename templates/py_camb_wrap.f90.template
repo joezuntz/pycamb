@@ -57,6 +57,8 @@ module pycamb_mod
         do i=1,nr
             P%transfer%redshifts(i)=redshifts(i)
         enddo
+        call Transfer_SortAndIndexRedshifts(P%Transfer)
+        
         call CAMB_GetResults(P)
         call freetransfers()
         allocate(transfers(Transfer_max,MT%num_q_trans,nred))
