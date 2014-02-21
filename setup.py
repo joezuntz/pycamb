@@ -51,7 +51,7 @@ if StrictVersion(numpy.version.version) > StrictVersion('1.6.1'):
                            include_dirs=[get_include()],
                            )
 else:
-    Extension("pycamb._pycamb",
+    pycamb_ext = Extension("pycamb._pycamb",
              ['src/py_camb_wrap.pyf'] + cambsources + ['src/py_camb_wrap.f90'],
              extra_compile_args=['-O0', '-g', '-Dintp=npy_intp'],
              include_dirs=[get_include()],
