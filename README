@@ -1,3 +1,17 @@
+Status of this code
+-------------------
+
+This code is very out of date indeed, and is known not to work correctly with more recent versions of camb.
+
+Unfortunately I can no longer support this code but I leave it here in case useful for future development.
+
+If you would like to take over responsibility for this code then please get in touch.
+
+
+Pycamb
+------
+
+
 This code is a python scripts that generates python bindings for the main functions of CAMB,
 the Code for Anisotropies in the Microwave Background.  See http://camb.info for more details on CAMB.
 
