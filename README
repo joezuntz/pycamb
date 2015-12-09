@@ -1,11 +1,8 @@
-Status of this code
+Don't use this code
 -------------------
 
-This code is very out of date indeed, and is known not to work correctly with more recent versions of camb.
+This code is out of data and no longer works with recent versions of camb.  Since camb itself now ships with python bindings you should use those instead.
 
-Unfortunately I can no longer support this code but I leave it here in case useful for future development.
-
-If you would like to take over responsibility for this code then please get in touch.
 
 
 Pycamb
